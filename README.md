@@ -11,40 +11,9 @@
 Este laboratório implementa uma **infraestrutura corporativa completa** com 4 máquinas virtuais, cobrindo **100% dos 5 domínios da certificação LFCS** (Linux Foundation Certified System Administrator).
 
 ###  Arquitetura do Ambiente
-┌─────────────────────────────────────────────────────────────────┐
-│ VMware Workstation 17 Pro │
-├─────────────────────────────────────────────────────────────────┤
-│ │
-│ ┌──────────────────────┐ ┌──────────────────────┐ │
-│ │ NODE 1 (RHEL 9) │ │ NODE 2 (Rocky 9) │ │
-│ │ Servidor Principal │ │ Servidor Secundário│ │
-│ ├──────────────────────┤ ├──────────────────────┤ │
-│ │ • Essential Commands │ │ • NFS Server │ │
-│ │ • Users & Groups │ │ • MySQL Replica │ │
-│ │ • Apache │ │ • DNS (BIND) │ │
-│ │ • HAProxy + Containers│ │ • FTP (vsftpd) │ │
-│ │ • LVM + Snapshots │ │ • SMTP (Postfix) │ │
-│ └──────────────────────┘ └──────────────────────┘ │
-│ ▲ ▲ │
-│ │ │ │
-│ └───────────┬───────────────┘ │
-│ │ │
-│ ┌──────────▼──────────┐ │
-│ │ NODE 3 (Ubuntu) │ │
-│ │ Container Host │ │
-│ ├──────────────────────┤ │
-│ │ • Podman/Docker │ │
-│ │ • Systemd containers │ │
-│ │ • KVM Virtualization │ │
-│ └──────────────────────┘ │
-│ │ │
-│ ┌──────────▼──────────┐ │
-│ │ CLIENT (AlmaLinux) │ │
-│ │ Testes Integração │ │
-│ └──────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
 
-text
+
+![[diagrama.png]]
 
 ## Domínios LFCS Cobertos
 
