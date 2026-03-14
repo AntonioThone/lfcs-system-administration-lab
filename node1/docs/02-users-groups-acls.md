@@ -7,9 +7,9 @@ sudo useradd -m qa
 sudo useradd -m -G wheel deployer
 
 # Definir senhas
-echo "analyst:TempPass123" | sudo chpasswd
+echo "analyst:12345678" | sudo chpasswd
 sudo passwd -e analyst  # Expirar password
-echo "qa:QaPass123" | sudo chpasswd
+echo "qa:12345678" | sudo chpasswd
 echo "deployer:Deploy123" | sudo chpasswd
 
 ## 2.2 Password Policies
