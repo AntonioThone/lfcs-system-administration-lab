@@ -1,0 +1,30 @@
+# Comandos LVM úteis
+
+# Physical Volumes
+pvcreate /dev/sdb
+pvs
+pvdisplay
+
+# Volume Groups
+vgcreate vg_data /dev/sdb
+vgs
+vgdisplay
+
+# Logical Volumes
+lvcreate -L 3G -T vg_data/thin_pool
+lvcreate -V 1G -T vg_data/thin_pool -n web_data
+lvs
+lvdisplay
+
+# Snapshots
+lvcreate -s -n web_data_snap -L 500M /dev/vg_data/web_data
+lvconvert --merge /dev/vg_data/web_data_snap
+
+# Extend
+lvextend -L +500M /dev/vg_data/web_data
+xfs_growfs /mnt/web
+
+# Remove
+lvremove /dev/vg_data/web_data_snap
+vgremove vg_data
+pvremove /dev/sdb

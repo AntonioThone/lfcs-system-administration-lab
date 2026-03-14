@@ -1,0 +1,12 @@
+module httpd_contexts 1.0;
+
+require {
+    type httpd_t;
+    type httpd_sys_content_t;
+    class file { read write };
+    class dir { search read };
+}
+
+# Allow httpd to read/write custom web directories
+allow httpd_t httpd_sys_content_t:file { read write };
+allow httpd_t httpd_sys_content_t:dir { search read };
