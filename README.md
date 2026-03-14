@@ -13,7 +13,7 @@ Este laboratório implementa uma **infraestrutura corporativa completa** com 4 m
 ###  Arquitetura do Ambiente
 
 
-![Diagrama do Lab](assets/diagram.png)
+![Diagrama do Lab](assets/diagrama.png)
 
 ## Domínios LFCS Cobertos
 
