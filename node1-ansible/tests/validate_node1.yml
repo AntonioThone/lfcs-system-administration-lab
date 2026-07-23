@@ -1,0 +1,93 @@
+---
+# tests/validate_node1.yml
+# Validação pós-provisionamento do Node 1.
+# Corrige o bug da v1: o teste de utilizadores agora usa o MESMO nome
+# ("analyst") que foi realmente criado pelo role users_groups.
+#
+# Uso:
+#   ansible-playbook tests/validate_node1.yml
+
+- name: Validar provisionamento do Node 1
+  hosts: node1
+  become: true
+  vars_files:
+    - ../group_vars/node1.yml
+  gather_facts: true
+
+  tasks:
+    - name: Verificar serviços essenciais ativos
+      ansible.builtin.service_facts:
+
+    - name: Confirmar que o haproxy está a correr
+      ansible.builtin.assert:
+        that:
+          - "ansible_facts.services['haproxy.service'].state == 'running'"
+        fail_msg: "haproxy não está ativo."
+        success_msg: "haproxy está ativo."
+
+    - name: Confirmar que o timer de limpeza de logs está ativo
+      # service_facts não regista unidades .timer, só .service — por isso
+      # esta verificação usa systemctl diretamente. noqa suprime o aviso de
+      # "usa um módulo" porque isto é uma consulta pura (changed_when: false),
+      # sem efeitos colaterais — equivalente em segurança a um módulo nativo.
+      ansible.builtin.command:  # noqa command-instead-of-module
+        cmd: systemctl is-active clean-logs.timer
+      register: timer_check
+      changed_when: false
+      failed_when: timer_check.stdout != "active"
+
+    - name: Confirmar que o Apache está instalado mas inativo (decisão de arquitetura)
+      ansible.builtin.assert:
+        that:
+          - "ansible_facts.services['httpd.service'].state != 'running'"
+        fail_msg: "httpd está a correr — devia estar parado (porta 80 é do HAProxy)."
+
+    - name: Verificar que os utilizadores do lab existem
+      ansible.builtin.command:
+        cmd: "id {{ item.name }}"
+      register: user_check
+      changed_when: false
+      failed_when: user_check.rc != 0
+      loop: "{{ lab_users }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Verificar resposta HTTP do HAProxy (6 pedidos, deve alternar backends)
+      ansible.builtin.uri:
+        url: "http://{{ node1_ip }}:{{ haproxy_frontend_port }}/"
+        return_content: true
+      register: lb_responses
+      loop: "{{ range(0, 6) | list }}"
+
+    - name: Confirmar que ambos os backends responderam (round-robin real)
+      ansible.builtin.assert:
+        that:
+          - "lb_responses.results | map(attribute='content') | unique | length == 2"
+        fail_msg: >
+          Só um backend respondeu — round-robin não está a alternar.
+          Respostas vistas: {{ lb_responses.results | map(attribute='content') | unique | list }}
+        success_msg: "Round-robin confirmado entre os dois containers."
+
+    - name: Verificar volume LVM presente
+      ansible.builtin.command:
+        cmd: "lvs {{ lvm_vg }}/{{ lvm_volume }}"
+      register: lvm_check
+      changed_when: false
+
+    - name: Confirmar que o volume está montado
+      ansible.builtin.command:
+        cmd: "findmnt {{ lvm_mountpoint }}"
+      register: mount_check
+      changed_when: false
+      failed_when: mount_check.rc != 0
+
+    - name: Confirmar modo SELinux Enforcing
+      ansible.builtin.command:
+        cmd: getenforce
+      register: selinux_check
+      changed_when: false
+      failed_when: "'Enforcing' not in selinux_check.stdout"
+
+    - name: Resumo da validação
+      ansible.builtin.debug:
+        msg: "Node 1 validado com sucesso: serviços, utilizadores, LVM, SELinux e round-robin OK."

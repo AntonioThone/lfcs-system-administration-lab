@@ -1,0 +1,40 @@
+---
+# playbook.yml
+# Reconstrução do Node 1 (RHEL 9) — 5 domínios LFCS como automação idempotente.
+#
+# Uso:
+#   ansible-playbook playbook.yml --ask-vault-pass
+#
+# Pré-requisito: criar group_vars/node1_vault.yml (ver node1_vault.yml.example)
+
+- name: Provisionar Node 1 — LFCS Lab
+  hosts: node1
+  become: true
+  vars_files:
+    - group_vars/node1.yml
+    - group_vars/node1_vault.yml
+
+  pre_tasks:
+    - name: Confirmar hostname alvo
+      ansible.builtin.debug:
+        msg: "A provisionar {{ node1_hostname }} ({{ node1_ip }})"
+
+  roles:
+    - role: essential_commands
+      tags: [essential, domain1]
+    - role: users_groups
+      tags: [users, domain2]
+    - role: operations_deployment
+      tags: [operations, domain3]
+    - role: networking
+      tags: [networking, domain4]
+    - role: storage
+      tags: [storage, domain5]
+
+  tasks:
+    # Fora do `roles:` de propósito — aqui a tag 'never' não é anulada por
+    # nenhuma tag herdada de role, por isso só corre se pedires
+    # explicitamente --tags storage_restore_test (ou --tags never).
+    - name: Importar teste destrutivo de restauro (storage)
+      ansible.builtin.import_tasks: roles/storage/tasks/restore_test.yml
+      tags: [storage_restore_test, never]
