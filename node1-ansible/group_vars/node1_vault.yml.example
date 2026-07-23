@@ -1,0 +1,17 @@
+---
+# group_vars/node1_vault.yml.example
+#
+# NÃO uses este ficheiro tal como está. É só para mostrar que variáveis
+# o vault real precisa de conter.
+#
+# Para criar o vault real:
+#   ansible-vault create group_vars/node1_vault.yml
+#
+# Cola este conteúdo (com passwords à tua escolha) e grava.
+# Nunca commitas o ficheiro node1_vault.yml em texto simples — só depois
+# de cifrado pelo ansible-vault é seguro fazer git add.
+
+vault_analyst_password: "SubstituirPorPasswordForte!23"
+vault_qa_password: "SubstituirPorPasswordForte!24"
+vault_deployer_password: "SubstituirPorPasswordForte!25"
+vault_mysql_repl_password: "SubstituirPorPasswordForte!26"

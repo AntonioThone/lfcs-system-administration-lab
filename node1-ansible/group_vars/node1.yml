@@ -1,0 +1,62 @@
+---
+# group_vars/node1.yml
+# Variáveis não-sensíveis. Passwords ficam em node1_vault.yml (cifrado com ansible-vault).
+
+node1_hostname: node1.lfcs.lab
+node1_ip: 192.168.100.147
+node1_timezone: Africa/Luanda
+node1_gateway: 192.168.100.1   # confirmado via `ip route` (default via 192.168.100.1 dev ens160)
+node1_dns: 192.168.1.1         # DNS do router real — a rede bloqueia 8.8.8.8/1.1.1.1 diretamente
+
+# --- Users & Groups ---
+lab_users:
+  - name: analyst
+    groups: []
+    force_password_change: true
+  - name: qa
+    groups: []
+    force_password_change: false
+  - name: deployer
+    groups: ["wheel"]
+    force_password_change: false
+
+password_policy:
+  max_days: 90
+  min_days: 1
+  warn_age: 7
+
+acl_target_dir: /srv/app
+acl_target_file: /srv/app/config.yml
+
+sudoers_rule:
+  user: deployer
+  command: /usr/bin/systemctl restart httpd
+
+# --- Operations & Deployment ---
+inotify_max_user_watches: 524288
+web_docroot: /data/www          # único caminho usado em todo o role — corrige a inconsistência da v1
+
+# --- Networking ---
+bond_interface: bond0
+bond_mode: active-backup
+bond_slaves:
+  - ens160
+  - ens192          # segunda NIC confirmada via `ip a` do utilizador
+
+haproxy_frontend_port: 80
+web_containers:
+  - name: web1
+    host_port: 8081
+  - name: web2
+    host_port: 8082
+
+# --- Storage ---
+lvm_disk: /dev/sda   # único disco SATA da VM (boot é NVMe → nvme0n1, namespace separado)
+lvm_vg: vg_data
+lvm_thinpool: thin_pool
+lvm_thinpool_size: 3G
+lvm_volume: web_data
+lvm_volume_size: 1G
+lvm_mountpoint: /mnt/web
+lvm_snapshot_name: web_data_snap
+lvm_snapshot_size: 500M
