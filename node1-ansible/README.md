@@ -133,18 +133,3 @@ Apaga `dados.txt` de propósito, depois reverte via `lvconvert --merge`. Só
 corre com esta tag explícita — confirma com `--list-tasks --tags storage`
 que isto **não** aparece nessa lista (é exatamente essa a proteção).
 
-## Notas para o relatório/portfolio
-
-- Este projeto demonstra a transição clássica sysadmin → DevOps: o mesmo
-  trabalho técnico (LFCS), mas expresso como infraestrutura-como-código,
-  com gestão de segredos e testes automatizados em vez de checklist manual.
-- A tabela de "problemas de ambiente" acima é, por si só, material de
-  entrevista: cada linha é uma história de diagnóstico real (logs lidos,
-  hipóteses eliminadas por ordem, causa raiz isolada antes de corrigir) —
-  não "copiei um comando do Stack Overflow e funcionou".
-- `tests/validate_node1.yml` é o artefacto mais forte para mostrar a um
-  recrutador: não é "correu sem erro", é "afirmo explicitamente o que tem
-  de ser verdade, e o Ansible confirma ou falha com mensagem clara".
-- Próximo passo: o mesmo padrão aplicado ao Node 2 (NFS, MySQL réplica,
-  BIND, vsftpd, Postfix), com o Node 1 a ganhar o papel de MySQL *source*
-  para a réplica deixar de estar pendurada.
