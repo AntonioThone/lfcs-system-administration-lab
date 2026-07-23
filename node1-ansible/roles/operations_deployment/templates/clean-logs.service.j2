@@ -1,0 +1,6 @@
+[Unit]
+Description=Clean old journal logs
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/journalctl --vacuum-time=14d

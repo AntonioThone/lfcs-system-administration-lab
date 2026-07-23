@@ -1,0 +1,71 @@
+---
+# roles/users_groups/tasks/main.yml
+# Domínio LFCS: Users & Groups (10%)
+# Cobre: criação de utilizadores, password policy, ACLs, regra de sudo
+#
+# Correções feitas face à v1 do lab:
+#   - nome de utilizador consistente em todo o role (era "analista" na criação
+#     e "analyst" no chpasswd/teste — bug real que fazia o teste falhar)
+#   - passwords nunca em texto simples num comando shell; vêm do vault e são
+#     hashed pelo Ansible antes de tocar no disco
+
+- name: Criar utilizadores do laboratório
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    groups: "{{ item.groups }}"
+    append: true
+    shell: /bin/bash
+    create_home: true
+    password: "{{ lookup('vars', 'vault_' + item.name + '_password') | password_hash('sha512') }}"
+  loop: "{{ lab_users }}"
+  no_log: true   # nunca imprimir o hash da password nos logs do Ansible
+
+- name: Forçar mudança de password no próximo login (apenas utilizadores marcados)
+  ansible.builtin.command:
+    cmd: "chage -d 0 {{ item.name }}"
+  loop: "{{ lab_users }}"
+  when: item.force_password_change | bool
+  changed_when: true
+
+- name: Aplicar política de password em /etc/login.defs
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: "^{{ item.key }}"
+    line: "{{ item.key }}   {{ item.value }}"
+  loop:
+    - { key: "PASS_MAX_DAYS", value: "{{ password_policy.max_days }}" }
+    - { key: "PASS_MIN_DAYS", value: "{{ password_policy.min_days }}" }
+    - { key: "PASS_WARN_AGE", value: "{{ password_policy.warn_age }}" }
+
+- name: Criar diretório alvo para o exercício de ACL
+  ansible.builtin.file:
+    path: "{{ acl_target_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Criar ficheiro de configuração de exemplo
+  ansible.builtin.copy:
+    dest: "{{ acl_target_file }}"
+    content: "database_password: secret\n"
+    owner: root
+    group: root
+    mode: "0640"
+
+- name: Conceder leitura via ACL ao utilizador qa (sem alterar permissões base)
+  ansible.posix.acl:
+    path: "{{ acl_target_file }}"
+    entity: qa
+    etype: user
+    permissions: r
+    state: present
+
+- name: Criar regra de sudo NOPASSWD para deployer reiniciar httpd
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/deployer-httpd
+    content: "{{ sudoers_rule.user }} ALL=(ALL) NOPASSWD: {{ sudoers_rule.command }}\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "visudo -cf %s"

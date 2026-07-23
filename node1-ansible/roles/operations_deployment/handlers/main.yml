@@ -1,0 +1,11 @@
+---
+# roles/operations_deployment/handlers/main.yml
+
+- name: Aplicar restorecon no webroot
+  ansible.builtin.command:
+    cmd: "restorecon -Rv {{ web_docroot }}"
+  changed_when: true
+
+- name: Recarregar systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true

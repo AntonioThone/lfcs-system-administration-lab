@@ -1,0 +1,105 @@
+---
+# roles/essential_commands/tasks/main.yml
+# Domínio LFCS: Essential Commands (20%)
+# Cobre: pacotes base, workflow Git, certificados SSL, ambiente de prática de wildcards/find
+
+- name: Configurar timezone (corrige o default do instalador, geralmente UTC/America)
+  community.general.timezone:
+    name: "{{ node1_timezone }}"
+
+- name: Instalar repositório EPEL (necessário para o htop — não existe em BaseOS/AppStream)
+  ansible.builtin.dnf:
+    name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+    state: present
+    disable_gpg_check: true
+
+- name: Instalar pacotes essenciais (BaseOS/AppStream)
+  ansible.builtin.dnf:
+    name:
+      - vim
+      - wget
+      - curl
+      - git
+      - net-tools
+      - bind-utils
+      - bash-completion
+      - tree
+    state: present
+
+- name: Instalar pacotes do EPEL
+  ansible.builtin.dnf:
+    name:
+      - htop
+    state: present
+
+- name: Configurar identidade Git global do utilizador admin
+  community.general.git_config:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    scope: global
+  loop:
+    - { key: "user.name", value: "username" }
+    - { key: "user.email", value: "user_email" }
+  become: false   # corre como o utilizador 'admin', não como root
+
+- name: Criar estrutura de prática de wildcards e find
+  ansible.builtin.file:
+    path: "/home/admin/lfcs-lab/{{ item }}"
+    state: directory
+    owner: admin
+    group: admin
+    mode: "0755"
+  loop:
+    - wildcard
+    - backup
+
+- name: Criar ficheiros de teste para exercícios de wildcards
+  ansible.builtin.file:
+    path: "/home/admin/lfcs-lab/wildcard/{{ item }}"
+    state: touch
+    owner: admin
+    group: admin
+    mode: "0644"
+  loop:
+    - a.conf
+    - ab.conf
+    - abc.conf
+    - abcd.conf
+    - b.conf
+    - bc.conf
+    - c.conf
+    - "1.txt"
+    - "12.txt"
+    - "123.txt"
+    - "1234.txt"
+    - file1.log
+    - file2.log
+    - file10.log
+    - file100.log
+
+- name: Verificar se já existe certificado SSL gerado
+  ansible.builtin.stat:
+    path: /home/admin/lfcs-lab/server.crt
+  register: essential_commands_ssl_cert
+
+- name: Gerar chave privada e CSR (idempotente — só corre se o cert não existir)
+  ansible.builtin.command:
+    cmd: >
+      openssl req -new -newkey rsa:2048 -nodes
+      -keyout /home/admin/lfcs-lab/server.key
+      -out /home/admin/lfcs-lab/server.csr
+      -subj "/C=AO/ST=Luanda/L=Luanda/O=LFCS Lab/CN={{ node1_hostname }}"
+  when: not essential_commands_ssl_cert.stat.exists
+  become: false
+  changed_when: true
+
+- name: Auto-assinar o certificado (idempotente)
+  ansible.builtin.command:
+    cmd: >
+      openssl x509 -req -days 365
+      -in /home/admin/lfcs-lab/server.csr
+      -signkey /home/admin/lfcs-lab/server.key
+      -out /home/admin/lfcs-lab/server.crt
+  when: not essential_commands_ssl_cert.stat.exists
+  become: false
+  changed_when: true

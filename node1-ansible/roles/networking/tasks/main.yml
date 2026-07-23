@@ -1,0 +1,113 @@
+---
+# roles/networking/tasks/main.yml
+# Domínio LFCS: Networking (25%)
+# Cobre: bonding, HAProxy load balancer, containers, firewall, SELinux (booleans + portas)
+#
+# Nota de arquitetura: bonding active-backup com UM escravo "funciona" mas não
+# demonstra failover real. Para um demo correto, o Node 1 devia ter 2 NICs
+# (ens160 + ens224) na VM antes de correr este role — ver README.
+
+- name: Criar ligação bond0 (active-backup)
+  community.general.nmcli:
+    type: bond
+    conn_name: "{{ bond_interface }}"
+    ifname: "{{ bond_interface }}"
+    mode: "{{ bond_mode }}"
+    ip4: "{{ node1_ip }}/24"
+    gw4: "{{ node1_gateway }}"
+    dns4: "{{ node1_dns }}"
+    state: present
+
+- name: Adicionar interfaces escravas ao bond0
+  community.general.nmcli:
+    type: ethernet
+    conn_name: "bond0-slave-{{ item }}"
+    ifname: "{{ item }}"
+    master: "{{ bond_interface }}"
+    slave_type: bond
+    state: present
+  loop: "{{ bond_slaves }}"
+
+- name: Instalar HAProxy
+  ansible.builtin.dnf:
+    name: haproxy
+    state: present
+
+- name: Implementar configuração do HAProxy
+  ansible.builtin.template:
+    src: haproxy.cfg.j2
+    dest: /etc/haproxy/haproxy.cfg
+    mode: "0644"
+    validate: "haproxy -c -f %s"
+  notify: Reiniciar HAProxy
+
+- name: Ativar e iniciar HAProxy
+  ansible.builtin.systemd_service:
+    name: haproxy
+    state: started
+    enabled: true
+
+- name: Instalar Podman
+  ansible.builtin.dnf:
+    name: podman
+    state: present
+
+- name: Criar diretórios base para o conteúdo de cada container
+  ansible.builtin.file:
+    path: "/srv/{{ item.name }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ web_containers }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Criar conteúdo distinto por container (para validar round-robin)
+  ansible.builtin.copy:
+    dest: "/srv/{{ item.0.name }}/index.html"
+    content: "Server {{ item.1 + 1 }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ web_containers | zip(range(0, web_containers | length)) | list }}"
+  loop_control:
+    label: "{{ item.0.name }}"
+
+- name: Subir containers nginx (web1, web2) atrás do HAProxy
+  containers.podman.podman_container:
+    name: "{{ item.name }}"
+    image: docker.io/library/nginx:stable
+    state: started
+    ports:
+      - "{{ item.host_port }}:80"
+    volumes:
+      - "/srv/{{ item.name }}/index.html:/usr/share/nginx/html/index.html:Z"
+  loop: "{{ web_containers }}"
+
+- name: Abrir portas necessárias no firewalld
+  ansible.posix.firewalld:
+    port: "{{ item }}/tcp"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop:
+    - "{{ haproxy_frontend_port }}"
+    - "{{ web_containers[0].host_port }}"
+    - "{{ web_containers[1].host_port }}"
+
+- name: Permitir ao HAProxy ligar a qualquer porta (SELinux boolean)
+  ansible.posix.seboolean:
+    name: haproxy_connect_any
+    state: true
+    persistent: true
+
+- name: Registar as portas dos containers como http_port_t no SELinux
+  community.general.seport:
+    ports: "{{ item }}"
+    proto: tcp
+    setype: http_port_t
+    state: present
+  loop:
+    - "{{ web_containers[0].host_port }}"
+    - "{{ web_containers[1].host_port }}"

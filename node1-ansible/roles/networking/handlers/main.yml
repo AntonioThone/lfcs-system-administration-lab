@@ -1,0 +1,7 @@
+---
+# roles/networking/handlers/main.yml
+
+- name: Reiniciar HAProxy
+  ansible.builtin.systemd_service:
+    name: haproxy
+    state: restarted

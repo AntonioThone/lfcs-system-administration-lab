@@ -1,0 +1,36 @@
+---
+# roles/storage/tasks/restore_test.yml
+#
+# Teste DESTRUTIVO de restauro via snapshot LVM. Apaga o ficheiro de dados
+# de propósito, depois reverte através do snapshot.
+#
+# Por desenho, isto NÃO é importado pelo role storage nem pelo playbook.yml
+# principal — só corre se for explicitamente importado com a tag 'never'
+# (ver playbook.yml). Correr isto exige sempre:
+#
+#   ansible-playbook playbook.yml --ask-vault-pass --ask-become-pass --tags storage_restore_test
+#
+# (a tag 'storage' sozinha NÃO é suficiente — é essa precisamente a
+# proteção que este desenho garante, ao contrário da v1 deste projeto)
+
+- name: "[Teste destrutivo] Simular perda de dados"
+  ansible.builtin.file:
+    path: "{{ lvm_mountpoint }}/dados.txt"
+    state: absent
+
+- name: "[Teste destrutivo] Desmontar antes do merge do snapshot"
+  ansible.posix.mount:
+    path: "{{ lvm_mountpoint }}"
+    state: unmounted
+
+- name: "[Teste destrutivo] Reverter para o snapshot"
+  ansible.builtin.command:
+    cmd: "lvconvert --merge /dev/{{ lvm_vg }}/{{ lvm_snapshot_name }}"
+  changed_when: true
+
+- name: "[Teste destrutivo] Remontar e confirmar que os dados voltaram"
+  ansible.posix.mount:
+    path: "{{ lvm_mountpoint }}"
+    src: "/dev/{{ lvm_vg }}/{{ lvm_volume }}"
+    fstype: xfs
+    state: mounted

@@ -1,0 +1,77 @@
+---
+# roles/operations_deployment/tasks/main.yml
+# Domínio LFCS: Operations & Deployment (25%)
+# Cobre: kernel tuning persistente, gestão de serviço (Apache), systemd timer, SELinux context
+#
+# Correção face à v1: webroot é definido UMA vez (web_docroot, em group_vars)
+# e usado consistentemente aqui — a v1 tinha /data/www numa secção e
+# /var/www/company noutra, resultado de copy-paste sem reconciliar.
+
+- name: Aplicar kernel tuning persistente (fs.inotify.max_user_watches)
+  ansible.posix.sysctl:
+    name: fs.inotify.max_user_watches
+    value: "{{ inotify_max_user_watches }}"
+    sysctl_file: /etc/sysctl.d/99-custom.conf
+    reload: true
+
+- name: Instalar Apache (httpd)
+  ansible.builtin.dnf:
+    name: httpd
+    state: present
+
+- name: Garantir que Apache está parado e desativado
+  ansible.builtin.systemd_service:
+    name: httpd
+    state: stopped
+    enabled: false
+  # Nota de decisão de arquitetura: Apache é instalado mas mantido desativado
+  # de propósito — a porta 80 é servida pelo HAProxy (ver role networking).
+  # Mantemos o pacote para o exercício de gestão de serviço do domínio 3.
+
+- name: Criar diretório do webroot
+  ansible.builtin.file:
+    path: "{{ web_docroot }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Publicar página de teste no webroot
+  ansible.builtin.copy:
+    dest: "{{ web_docroot }}/index.html"
+    content: "<h1>SELinux Test - {{ node1_hostname }}</h1>\n"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Apontar DocumentRoot do Apache para o webroot definido
+  ansible.builtin.lineinfile:
+    path: /etc/httpd/conf/httpd.conf
+    regexp: '^DocumentRoot '
+    line: 'DocumentRoot "{{ web_docroot }}"'
+
+- name: Aplicar contexto SELinux correto ao webroot
+  community.general.sefcontext:
+    target: "{{ web_docroot }}(/.*)?"
+    setype: httpd_sys_content_t
+    state: present
+  notify: Aplicar restorecon no webroot
+
+- name: Implementar systemd service de limpeza de logs
+  ansible.builtin.template:
+    src: clean-logs.service.j2
+    dest: /etc/systemd/system/clean-logs.service
+    mode: "0644"
+
+- name: Implementar systemd timer de limpeza de logs
+  ansible.builtin.template:
+    src: clean-logs.timer.j2
+    dest: /etc/systemd/system/clean-logs.timer
+    mode: "0644"
+  notify: Recarregar systemd
+
+- name: Ativar e iniciar o timer de limpeza de logs
+  ansible.builtin.systemd_service:
+    name: clean-logs.timer
+    state: started
+    enabled: true

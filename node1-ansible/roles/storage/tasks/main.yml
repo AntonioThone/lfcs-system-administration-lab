@@ -1,0 +1,78 @@
+---
+# roles/storage/tasks/main.yml
+# Domínio LFCS: Storage (20%)
+# Cobre: LVM thin provisioning, filesystem persistente, snapshot + restore testado
+
+- name: Verificar se o disco de dados existe
+  ansible.builtin.stat:
+    path: "{{ lvm_disk }}"
+  register: storage_data_disk
+
+- name: Falhar com mensagem clara se o disco não estiver presente
+  ansible.builtin.fail:
+    msg: >
+      {{ lvm_disk }} não existe. Adiciona um segundo disco de 5GB+ à VM
+      no VMware (Settings > Add > Hard Disk) antes de correr este role.
+  when: not storage_data_disk.stat.exists
+
+- name: Criar Physical Volume
+  community.general.lvg:
+    vg: "{{ lvm_vg }}"
+    pvs: "{{ lvm_disk }}"
+    state: present
+
+- name: Criar thin pool
+  community.general.lvol:
+    vg: "{{ lvm_vg }}"
+    thinpool: "{{ lvm_thinpool }}"
+    size: "{{ lvm_thinpool_size }}"
+
+- name: Criar volume thin
+  community.general.lvol:
+    vg: "{{ lvm_vg }}"
+    lv: "{{ lvm_volume }}"
+    thinpool: "{{ lvm_thinpool }}"
+    size: "{{ lvm_volume_size }}"
+
+- name: Formatar o volume em XFS
+  community.general.filesystem:
+    fstype: xfs
+    dev: "/dev/{{ lvm_vg }}/{{ lvm_volume }}"
+
+- name: Montar o volume de forma persistente
+  ansible.posix.mount:
+    path: "{{ lvm_mountpoint }}"
+    src: "/dev/{{ lvm_vg }}/{{ lvm_volume }}"
+    fstype: xfs
+    state: mounted
+
+- name: Verificar se já existe ficheiro de dados de teste
+  ansible.builtin.stat:
+    path: "{{ lvm_mountpoint }}/dados.txt"
+  register: storage_dados_file
+
+- name: Criar dados de teste (apenas na primeira execução)
+  ansible.builtin.copy:
+    dest: "{{ lvm_mountpoint }}/dados.txt"
+    content: "Dados importantes - criado pelo Ansible\n"
+    mode: "0644"
+  when: not storage_dados_file.stat.exists
+
+- name: Verificar se o snapshot já existe
+  ansible.builtin.command:
+    cmd: "lvs {{ lvm_vg }}/{{ lvm_snapshot_name }}"
+  register: storage_snap_check
+  failed_when: false
+  changed_when: false
+
+- name: Criar snapshot do volume (idempotente)
+  community.general.lvol:
+    vg: "{{ lvm_vg }}"
+    lv: "{{ lvm_volume }}"
+    snapshot: "{{ lvm_snapshot_name }}"
+    size: "{{ lvm_snapshot_size }}"
+  when: storage_snap_check.rc != 0
+
+# Teste de restauro real: ver tasks/restore_test.yml, importado diretamente
+# no playbook.yml (fora do role) para a tag 'never' funcionar de verdade —
+# dentro do role, a tag 'storage' herdada anulava a proteção.
